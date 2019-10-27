@@ -1,0 +1,52 @@
+---
+- name: install radarr dependencies
+  package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - mono
+    - libmediainfo
+    - sqlite
+    - git
+    - npm
+    - nodejs
+
+- name: clone git repository
+  git:
+    repo: "{{ radarr_git_repository }}"
+    dest: "{{ git_clone_location }}/radarr.git"
+    update: yes
+    track_submodules: yes
+
+- name: install nodejs dependencies
+  npm:
+    path: "{{ git_clone_location }}/radarr.git"
+
+- name: initialize git submodules
+  shell: "git submodule update --init"
+  args:
+    chdir: "{{ git_clone_location }}/radarr.git"
+
+- name: create temporary nuget directory
+  file:
+    path: /opt/nuget
+    state: directory
+
+- name: download latest available nuget
+  get_url:
+    url: https://dist.nuget.org/win-x86-commandline/latest/nuget.exe
+    dest: /opt/nuget
+
+- name: clean radarr
+  shell: "msbuild {{ git_clone_location }}/radarr.git/src/NzbDrone.sln /t:Clean"
+
+- name: restore radarr solution file
+  shell: "mono /opt/nuget/nuget.exe restore {{ git_clone_location }}/radarr.git/src/NzbDrone.sln"
+
+- name: build radarr
+  shell: "msbuild {{ git_clone_location }}/radarr.git/src/NzbDrone.sln /p:Configuration=Release /t:Build /p:Platform=x86 /p:AllowedReferenceRelatedFileExtensions=.pdb"
+
+- name: build gulp nodejs module
+  shell: "node {{ git_clone_location }}/radarr.git/node_modules/gulp/bin/gulp.js build"
+  args:
+    chdir: "{{ git_clone_location }}/radarr.git"

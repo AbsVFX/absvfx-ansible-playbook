@@ -1,0 +1,74 @@
+---
+- name: install arch linux base (UEFI)
+  shell: "pacstrap /mnt base linux linux-firmware lvm2 xfsprogs grub efibootmgr"
+  when: efi_firmware_directory.stat.exists
+  tags:
+    - fresh
+
+- name: install arch linux base (BIOS)
+  shell: "pacstrap /mnt base linux linux-firmware lvm2 xfsprogs grub"
+  when: not efi_firmware_directory.stat.exists
+  tags:
+    - fresh
+
+- name: generate fstab
+  shell: "genfstab -U /mnt >> /mnt/etc/fstab"
+
+- name: symlink timezone
+  shell: "arch-chroot /mnt /usr/bin/ln -sfv /usr/share/zoneinfo/Europe/London /etc/localtime"
+
+- name: set hostname
+  copy:
+    dest: /mnt/etc/hostname
+    content: ws
+
+# BIND MOUND PARTITIONS
+- name: bind partitions from root
+  mount:
+    path: "/mnt/{{ item }}"
+    src: "/{{ item }}"
+    opts: bind
+    state: mounted
+    fstype: none
+  loop:
+    - dev
+    - dev/pts
+    - proc
+    - sys
+    - sys/firmware/efi/efivars
+    - run
+
+# ADJUST SYSTEM LOCALE
+- name: uncomment requested languages
+  blockinfile:
+    content: | 
+      fr_FR.UTF-8 UTF-8  
+      fr_FR ISO-8859-1  
+    dest: /mnt/etc/locale.gen
+
+- name: generate locales
+  shell: "arch-chroot /mnt /usr/bin/locale-gen"
+
+- name: adjust hardware clock
+  shell: "arch-chroot /mnt /usr/bin/hwclock --systohc"
+
+# CONFIGURE BOOT IMAGE
+- name: configure mkinitcpio hooks
+  shell: sed -i 's/block/block lvm2/' /mnt/etc/mkinitcpio.conf
+
+# GENERATE BOOT IMAGE
+- name: generate kernel image
+  shell: "arch-chroot /mnt /usr/bin/mkinitcpio -P"
+
+# INSTALL BOOT LOADER (GRUB)
+- name: install bootloader (UEFI)
+  shell: "arch-chroot /mnt /usr/bin/grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB"
+  when: efi_firmware_directory.stat.exists
+
+- name: install bootloader (BIOS)
+  shell: "arch-chroot /mnt /usr/bin/grub-install --target=i386-pc {{ root_device }}"
+  when: not efi_firmware_directory.stat.exists
+
+- name: configure bootloader
+  shell: "arch-chroot /mnt /usr/bin/grub-mkconfig -o /boot/grub/grub.cfg"
+  ignore_errors: True

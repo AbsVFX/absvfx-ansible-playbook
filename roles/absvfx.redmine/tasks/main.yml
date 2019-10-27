@@ -1,0 +1,78 @@
+---
+- name: pull required docker images
+  docker_image:
+    name: "{{ item }}"
+    source: pull
+  loop:
+    - redmine:latest
+    - postgres:latest
+  tags:
+    - install
+    - update
+
+- name: create redmine volumes
+  file:
+    path: "/opt/docker/absvfx_redmine/{{ item }}"
+    state: directory
+    mode: '0775'
+    owner: root
+    group: root
+  loop:
+    - "postgres/data"
+    - redmine
+  tags: install
+
+- name: start postgres docker image
+  docker_container:
+    name: absvfx_redmine_db
+    image: postgres:latest
+    state: started
+    recreate: yes
+    networks:
+      - name: absvfx_dev
+        aliases:
+          - db.redmine.absvfx.xyz
+    volumes:
+      - "/opt/docker/absvfx_redmine/postgres/data:/var/lib/postgresql/data"
+    env:
+      POSTGRES_PASSWORD: redmine
+      POSTGRES_USER: redmine
+  tags:
+    - install
+    - update
+    - up
+
+- name: start redmine docker image
+  docker_container:
+    name: absvfx_redmine
+    image: redmine:latest
+    state: started
+    recreate: yes
+    networks:
+      - name: absvfx_dev
+        aliases:
+          - redmine.absvfx.xyz
+      - name: absvfx_web
+        aliases:
+          - "{{ redmine_internal_host_name }}"
+    env:
+      REDMINE_DB_POSTGRES: db.redmine.absvfx.xyz
+      REDMINE_DB_USERNAME: redmine
+      REDMINE_DB_PASSWORD: redmine
+  tags:
+    - install
+    - update
+    - up
+
+- name: store web server connection information
+  set_fact:
+    web_server_proxy_info: "{{ web_server_proxy_info|default([]) + [config] }}"
+  vars:
+    config:
+      server_name: "{{ redmine_public_server_name }}"
+      host_name: "{{ redmine_internal_host_name }}"
+      port_number: 3000
+  tags:
+    - install
+    - configure
+    - up

@@ -1,0 +1,93 @@
+---
+- name: create web docker network
+  docker_network:
+    name: absvfx_web
+  tags:
+    - install
+    - preconfigure
+  when: web_docker_network_created is not defined
+
+- name: store state of network creation
+  set_fact:
+    web_docker_network_created: yes
+
+- name: pull required docker images
+  docker_image:
+    name: "{{ item }}"
+    source: pull
+  loop:
+    - nginx:latest
+  tags:
+    - install
+    - update
+  when: web_server_proxy_info is defined
+
+- name: create nginx volume
+  file:
+    path: "/opt/docker/absvfx_webserver"
+    state: directory
+  tags: install
+  when: web_server_proxy_info is defined
+
+- name: build default nginx configuration
+  copy:
+    content: |
+      events {
+        worker_connections 1024;
+      }
+      http {
+      }
+    dest: /opt/docker/absvfx_webserver/nginx.conf
+  tags:
+    - install
+    - update
+    - preconfigure
+  when: web_server_proxy_info is defined
+
+- name: add proxy rules to nginx configuration file
+  blockinfile:
+    path: /opt/docker/absvfx_webserver/nginx.conf
+    block: |
+      server {
+        listen 80;
+        listen [::]:80;
+
+        server_name {{ item.server_name }};
+        
+        location / {
+          proxy_pass http://{{ item.host_name }}:{{ item.port_number }}/;
+        }
+      }
+    marker: "# {mark} ANSIBLE MANAGED BLOCK {{ item.server_name }}"
+    insertafter: "http {"
+  loop: 
+    "{{ web_server_proxy_info|list }}"
+  tags:
+    - install
+    - update
+    - postconfigure
+  when: web_server_proxy_info is defined
+
+- name: start nginx docker image
+  docker_container:
+    name: absvfx_webserver
+    image: nginx:latest
+    state: started
+    recreate: yes
+    networks:
+      - name: absvfx_web
+        aliases:
+          - dev.absvfx.xyz
+          - absvfx.me
+      - name: absvfx_wordpress
+      - name: absvfx_dev
+    volumes:
+      - "/opt/docker/absvfx_webserver/nginx.conf:/etc/nginx/nginx.conf:ro"
+    ports:
+      - "80:80"
+      - "443:443"
+  tags:
+    - install
+    - update
+    - up
+  when: web_server_proxy_info is defined

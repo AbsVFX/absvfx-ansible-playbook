@@ -1,0 +1,11 @@
+---
+- name: obtain datetime
+  shell: "date %Y%m%d-%H%M%S"
+  register: time
+  tags: backup
+
+- name: Compress mariadb data directory
+  archive:
+    path: /opt/docker/absvfx_wordpress/mariadb
+    dest: "{{ /tmp/absvfx_wordpress_mariadb_{{ time }}.tgz }}"
+  tags: backup

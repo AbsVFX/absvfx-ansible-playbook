@@ -1,0 +1,79 @@
+---
+- name: pull required docker images
+  docker_image:
+    name: "{{ item }}"
+    source: pull
+  loop:
+    - mariadb:latest
+    - wordpress:latest
+  tags:
+    - install
+    - update
+
+- name: create wordpress docker network
+  docker_network:
+    name: absvfx_wordpress
+  tags: install
+
+- name: create wordpress volumes
+  file:
+    path: "/opt/docker/absvfx_wordpress/{{ item }}"
+    state: directory
+  loop:
+    - mariadb
+  tags: install
+
+- name: start mariadb docker image
+  docker_container:
+    name: absvfx_wordpress_db
+    image: mariadb:latest
+    state: started
+    recreate: yes
+    networks:
+      - name: absvfx_wordpress
+        aliases:
+          - db.wordpress.absvfx.xyz
+    volumes:
+      - "/opt/docker/absvfx_wordpress/mariadb:/var/lib/mysql"
+    env:
+      MYSQL_ROOT_PASSWORD: "{{ nzb_tertiary_newsserver_password }}"
+  tags:
+    - install
+    - update
+    - up
+
+- name: start wordpress docker image
+  docker_container:
+    name: absvfx_wordpress
+    image: wordpress:latest
+    state: started
+    recreate: yes
+    networks:
+      - name: absvfx_wordpress
+        aliases:
+          - "{{ wordpress_internal_host_name }}"
+      - name: absvfx_web
+        aliases:
+          - "{{ wordpress_internal_host_name }}"
+    env:
+      WORDPRESS_DB_HOST: db.wordpress.absvfx.xyz
+      WORDPRESS_DB_USER: root
+      WORDPRESS_DB_PASSWORD: "{{ nzb_tertiary_newsserver_password }}"
+      WORDPRESS_DB_NAME: wp_absvfx
+  tags:
+    - install
+    - update
+    - up
+
+- name: store web server connection information
+  set_fact:
+    web_server_proxy_info: "{{ web_server_proxy_info|default([]) + [config] }}"
+  vars:
+    config:
+      server_name: "{{ wordpress_public_server_name }}"
+      host_name: "{{ wordpress_internal_host_name }}"
+      port_number: 80
+  tags:
+    - install
+    - configure
+    - up

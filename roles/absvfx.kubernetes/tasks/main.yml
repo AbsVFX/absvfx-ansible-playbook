@@ -1,0 +1,42 @@
+---
+- name: install k8s yum repository
+  copy:
+    dest: /etc/yum.repos.d/kubernetes.repo
+    content: |
+      [kubernetes]
+      name=Kubernetes
+      baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+      enabled=1
+      gpgcheck=1
+      repo_gpgcheck=1
+      gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg
+              https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+
+- name: install k8s
+  package:
+    name: kubeadm
+
+- name: enable k8s systemd service
+  systemd:
+    state: started
+    enabled: yes
+    name: "kubelet"
+
+- name: initialize k8s cluster
+  shell: kubeadm init
+
+- name: give root user access to k8s cluster
+  file:
+    path: "/root/.kube"
+    state: directory
+
+- name: copy k8s configuration
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+
+#- name: adjust k8s configuration permissions
+#  chown:
+#    path: /root/.kube/config
+#    uid: 0
+#    gid: 0

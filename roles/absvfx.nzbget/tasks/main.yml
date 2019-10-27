@@ -1,0 +1,138 @@
+---
+- name: install nzbget dependencies
+  package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - unrar
+
+- name: clone git repository
+  git:
+    repo: "{{ nzbget_git_repository }}"
+    dest: "{{ git_clone_location }}/nzbget.git"
+    update: yes
+    track_submodules: yes
+
+- name: configure nzbget
+  shell: ./configure
+  args:
+    chdir: "{{ git_clone_location }}/nzbget.git"
+
+- name: build nzbget
+  shell: "make -j{{ make_threads }}"
+  args:
+    chdir: "{{ git_clone_location }}/nzbget.git"
+
+- name: install nzbget
+  shell: make install
+  args:
+    chdir: "{{ git_clone_location }}/nzbget.git"
+
+- name: create nzbget service
+  copy:
+    dest: /lib/systemd/system/nzbget.service
+    content: |
+      [Unit]
+      Description=NZBGet Service
+      After=network.target
+      [Service]
+      User=plex
+      Group=plex
+      ExecStart=/usr/local/bin/nzbget -D
+      ExecStop=/usr/local/bin/nzbget -Q
+      ExecReload=/usr/local/bin/nzbget -O
+      KillMode=process
+      Restart=on-failure
+      Type=forking
+      [Install]
+      WantedBy=multi-user.target
+
+- name: create nzbget config file
+  copy:
+    dest: /etc/nzbget.conf
+    content: |
+      MainDir=/int/data/nzbget
+      DestDir=${MainDir}/dst
+      InterDir=/stor/data/nzbget
+      NzbDir=${MainDir}/nzb
+      QueueDir=${MainDir}/queue
+      TempDir=${MainDir}/tmp
+      LockFile=${MainDir}/nzbget.lock
+      LogFile=~/nzbget.log
+      ControlIP=127.0.0.1
+      ControlPort=6789
+      ControlUsername=nzbget
+      ControlPassword=tegbzn6789
+      ConfigTemplate=/usr/local/share/nzbget/nzbget.conf
+      WebDir=/usr/local/share/nzbget/webui
+
+- name: add primary to nzbget config file
+  blockinfile:
+    path: /etc/nzbget.conf
+    content: |
+      Server1.Active=yes
+      Server1.Name={{ nzb_primary_newsserver_name }}
+      Server1.Level=0
+      Server1.Optional=no
+      Server1.Group=0
+      Server1.Host={{ nzb_primary_newsserver_host }}
+      Server1.Port={{ nzb_primary_newsserver_port }}
+      Server1.Username={{ nzb_primary_newsserver_user }}
+      Server1.Password={{ nzb_primary_newsserver_password }}
+      Server1.JoinGroup=no
+      Server1.Encryption=yes
+      Server1.Cipher=
+      Server1.Connections={{ nzb_primary_newsserver_connections }}
+      Server1.Retention=0
+      Server1.IpVersion=auto
+      Server1.Notes=
+      Server2.Active=yes
+      Server2.Name={{ nzb_secondary_newsserver_name }}
+      Server2.Level=1
+      Server2.Optional=no
+      Server2.Group=0
+      Server2.Host={{ nzb_secondary_newsserver_host }}
+      Server2.Port={{ nzb_secondary_newsserver_port }}
+      Server2.Username={{ nzb_secondary_newsserver_user }}
+      Server2.Password={{ nzb_secondary_newsserver_password }}
+      Server2.JoinGroup=no
+      Server2.Encryption=yes
+      Server2.Cipher=
+      Server2.Connections={{ nzb_secondary_newsserver_connections }}
+      Server2.Retention=0
+      Server2.IpVersion=auto
+      Server2.Notes=
+      Server3.Active=yes
+      Server3.Name={{ nzb_tertiary_newsserver_name }}
+      Server3.Level=2
+      Server3.Optional=no
+      Server3.Group=0
+      Server3.Host={{ nzb_tertiary_newsserver_host }}
+      Server3.Port={{ nzb_tertiary_newsserver_port }}
+      Server3.Username={{ nzb_tertiary_newsserver_user }}
+      Server3.Password={{ nzb_tertiary_newsserver_password }}
+      Server3.JoinGroup=no
+      Server3.Encryption=yes
+      Server3.Cipher=
+      Server3.Connections={{ nzb_tertiary_newsserver_connections }}
+      Server3.Retention=0
+      Server3.IpVersion=auto
+      Server3.Notes=
+
+- name: rebase permissions
+  file:
+    path: "/usr/local/share/nzbget/"
+    owner: plex
+    group: plex
+    mode: 0755
+    recurse: yes
+
+- name: reload systemd daemon
+  shell: systemctl daemon-reload
+
+- name: enable and start nzbget
+  systemd:
+    state: started
+    enabled: yes
+    name: "nzbget"
+

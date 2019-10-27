@@ -1,0 +1,45 @@
+---
+- name: install required packages
+  package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - postfix
+    - dovecot
+  tags:
+    - install
+    - update
+
+- name: authorize mail server
+  shell: echo hi
+  delegate_to: authority
+
+- name: create postfix aliases file
+  file:
+    path: /etc/postfix/aliases
+    state: touch
+  tags: install
+
+- name: adjust postfix aliases
+  blockinfile:
+    path: /etc/postfix/aliases
+    block: |
+      {{ item.key }}: {{ item.value }}
+  loop: "{{ postfix_aliases|dict2items }}"
+  tags: configure
+
+- name: apply postfix aliases
+  shell: /usr/sbin/postalias /etc/postfix/aliases
+  tags:
+    - configure
+    - update
+
+- name: enable required services
+  systemd:
+    state: started
+    enabled: yes
+    name: "{{ item }}"
+  loop:
+    - postfix
+  tags: install
+

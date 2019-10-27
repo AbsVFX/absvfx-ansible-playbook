@@ -1,0 +1,3 @@
+---
+public_server_name: ci.absvfx.xyz
+internal_host_name: jenkins.absvfx.xyz

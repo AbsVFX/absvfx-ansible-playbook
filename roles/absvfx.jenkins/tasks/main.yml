@@ -1,0 +1,70 @@
+---
+- name: pull required docker images
+  docker_image:
+    name: "{{ item }}"
+    source: pull
+  loop:
+    - jenkins:latest
+  tags:
+    - install
+    - update
+
+- name: create developer docker network
+  docker_network:
+    name: absvfx_dev
+  tags:
+    - install
+
+- name: create jenkins volumes
+  file:
+    path: "/opt/docker/absvfx_jenkins"
+    state: directory
+    mode: '0775'
+    owner: root
+    group: absvfx
+  tags: install
+
+- name: start jenkins docker image
+  docker_container:
+    name: absvfx_jenkins
+    image: jenkins:latest
+    state: started
+    recreate: yes
+    networks:
+      - name: absvfx_dev
+        aliases:
+          - "{{ jenkins_internal_host_name }}"
+      - name: absvfx_web
+        aliases:
+          - "{{ jenkins_internal_host_name }}"
+    volumes:
+      - "/opt/docker/absvfx_jenkins:/var/jenkins_home"
+      - "/opt/git:/git"
+  tags:
+    - install
+    - up
+
+- name: store docker container information
+  set_fact:
+    docker_containers: "{{ docker_containers|default([]) + [container] }}"
+  vars:
+    container:
+      container_name: "{{ item }}"
+      host_name: "{{ jenkins_internal_host_name }}"
+  loop:
+    - absvfx_jenkins
+  tags:
+    - backup
+
+- name: store web server connection information
+  set_fact:
+    web_server_proxy_info: "{{ web_server_proxy_info|default([]) + [config] }}"
+  vars:
+    config:
+      server_name: "{{ jenkins_public_server_name }}"
+      host_name: "{{ jenkins_internal_host_name }}"
+      port_number: 8080
+  tags:
+    - install
+    - configure
+    - up

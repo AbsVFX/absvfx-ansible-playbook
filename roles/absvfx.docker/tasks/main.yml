@@ -1,0 +1,98 @@
+---
+- name: add docker-ce yum repository
+  shell: yum-config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
+  args:
+    creates: /etc/yum.repos.d/docker-ce.repo
+  tags: install
+
+- name: install docker
+  package:
+    name: "{{ item }}"
+  loop:
+    - docker-ce
+  tags:
+    - install
+    - update
+
+- name: reload systemd daemon
+  shell: systemctl daemon-reload
+  tags:
+    - install
+    - update
+
+- name: enable and start docker
+  systemd:
+    state: started
+    enabled: yes
+    name: "docker"
+  tags: install
+
+- name: restart docker service
+  systemd:
+    state: restarted
+    name: "docker"
+  tags: update
+
+- name: install docker pip module
+  pip:
+    name: docker
+  tags:
+    - install
+    - update
+
+#- include_tasks: backup.yml
+- name: obtain datetime
+  shell: "date +%Y%m%d-%H%M%S"
+  register: time
+  tags: backup
+  when: docker_containers is defined
+
+- name: save current state of container
+  shell: "docker export {{ item.container_name }} > /tmp/{{ item.container_name }}_container_{{ time.stdout }}.tgz"
+  loop:
+    "{{ docker_containers|list }}"
+  tags: backup
+  when: docker_containers is defined
+
+- name: copy container backups
+  fetch:
+    src: "/tmp/{{ item.container_name }}_container_{{ time.stdout }}.tgz"
+    dest: "{{ backup_directory }}"
+  loop:
+    "{{ docker_containers|list }}"
+  tags: backup
+  when: docker_containers is defined
+
+- name: remove container backups from node
+  file:
+    path: "/tmp/{{ item.container_name }}_container_{{ time.stdout }}.tgz"
+    state: absent
+  loop:
+    "{{ docker_containers|list }}"
+  tags: backup
+  when: docker_containers is defined
+
+- name: compress container volumes
+  archive:
+    path: "/opt/docker/{{ item.container_name }}"
+    dest: "/tmp/{{ item.container_name }}_volume_{{ time.stdout }}.tgz"
+  tags: backup
+  when: docker_containers is defined
+
+- name: copy container volumes
+  fetch:
+    src: "/tmp/{{ item.container_name }}_volume_{{ time.stdout }}.tgz"
+    dest: "{{ backup_directory }}"
+  loop:
+    "{{ docker_containers|list }}"
+  tags: backup
+  when: docker_containers is defined
+
+- name: remove container volume backups from node
+  file:
+    path: "/tmp/{{ item.container_name }}_volume_{{ time.stdout }}.tgz"
+    state: absent
+  loop:
+    "{{ docker_containers|list }}"
+  tags: backup
+  when: docker_containers is defined

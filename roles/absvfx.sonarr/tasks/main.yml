@@ -1,0 +1,104 @@
+---
+# YES: Linux
+# NO: Windows
+# NO: macOS
+
+- name: install sonarr dependencies
+  package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - mono
+    - libmediainfo
+    - sqlite
+    - git
+    - npm
+    - nodejs
+    - libmediainfo
+
+- name: symlink libmediainfo for Mono
+  file:
+    src: /usr/lib/libmediainfo.so
+    dest: /usr/lib/libMediaInfo.so
+    state: link
+
+- name: clone git repository
+  git:
+    repo: "{{ sonarr_git_repository }}"
+    dest: "{{ git_clone_location }}/sonarr.git"
+    update: yes
+    track_submodules: yes
+
+- name: install nodejs dependencies
+  npm:
+    path: "{{ git_clone_location }}/sonarr.git"
+
+- name: initialize git submodules
+  shell: "git submodule update --init"
+  args:
+    chdir: "{{ git_clone_location }}/sonarr.git"
+
+- name: create temporary nuget directory
+  file:
+    path: /opt/nuget
+    state: directory
+
+- name: download latest available nuget
+  get_url:
+    url: https://dist.nuget.org/win-x86-commandline/latest/nuget.exe
+    dest: /opt/nuget
+
+- name: restore sonarr solution file
+  shell: "mono /opt/nuget/nuget.exe restore {{ git_clone_location }}/sonarr.git/src/Sonarr.sln"
+
+- name: build sonarr
+  shell: "msbuild {{ git_clone_location }}/sonarr.git/src/Sonarr.sln /p:Configuration=Release /t:Build"
+
+- name: build gulp nodejs module
+  shell: "node {{ git_clone_location }}/sonarr.git/node_modules/gulp/bin/gulp.js build"
+  args:
+    chdir: "{{ git_clone_location }}/sonarr.git"
+
+- name: create sonarr installation directory
+  file:
+    path: /usr/lib/sonarr
+    state: directory
+
+- name: install sonarr
+  shell: "cp -R {{ git_clone_location }}/sonarr.git/_output/* /usr/lib/sonarr/"
+
+- name: rebase permissions
+  file:
+    path: "/usr/lib/sonarr/"
+    owner: root
+    group: root
+    mode: 0755
+    recurse: yes
+
+- name: create sonarr service
+  copy:
+    dest: /lib/systemd/system/sonarr.service
+    content: |
+      [Unit]
+      Description=Sonarr Service
+      After=network.target
+      [Service]
+      User=plex
+      Group=plex
+      ExecStart=/usr/bin/mono /usr/lib/sonarr/Sonarr.Console.exe
+      Environment=MONO_IOMAP=case
+      KillMode=process
+      Restart=on-failure
+      Type=simple
+      [Install]
+      WantedBy=multi-user.target
+
+- name: reload systemd daemon
+  shell: systemctl daemon-reload
+
+- name: enable and start sonarr
+  systemd:
+    state: started
+    enabled: yes
+    name: "sonarr"
+

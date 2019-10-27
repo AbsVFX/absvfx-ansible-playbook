@@ -1,0 +1,15 @@
+---
+- name: find wine games to backup
+  find:
+    path: "/int/lutris"
+    file_type: directory
+    recurse: no
+  register: wine_games
+
+- name: perform wine games backup
+  archive:
+    format: bz2
+    dest: "{{ item }}.tar.bzip2"
+    path: "{{ item }}/*"
+  with_items: "{{ wine_games.files | map(attribute='path') | list }}"
+  when: wine_games in backup_data

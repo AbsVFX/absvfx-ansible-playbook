@@ -1,0 +1,58 @@
+---
+#https://downloads.plex.tv/plex-media-server-new/1.16.5.1488-deeb86e7f/windows/PlexMediaServer-1.16.5.1488-deeb86e7f-x86.exe
+
+#- name: download plexmediaserver
+#  get_url:
+#    url: "https://downloads.plex.tv/plex-media-server-new/{{ plex_version }}-{{ plex_checksum }}/redhat/plexmediaserver-{{ plex_version }}-{{ plex_checksum }}.x86_64.rpm"
+#    dest: /tmp/plexmediaserver.rpm
+
+- name: create plexmediaserver directories
+  file:
+    path: "{{ item }}"
+    state: directory
+  loop:
+    - /usr/lib/plexmediaserver
+    - /tmp/plexmediaserver
+
+- name: extract plexmediaserver
+  shell: bsdtar -xf /tmp/plexmediaserver.rpm
+  args:
+    chdir: /tmp/plexmediaserver
+
+- name: remove un-necessary files from plexmediaserver
+  file:
+    path: "/tmp/plexmediaserver/etc"
+    state: absent
+
+- name: install plexmediaserver
+  shell: "cp -R /tmp/plexmediaserver/{{ item }} /{{ item }}"
+  loop:
+    - "usr"
+    - "lib/systemd/system/plexmediaserver.service"
+
+- name: create plex user
+  user:
+    name: plex
+    create_home: yes
+    home: /var/lib/plexmediaserver
+    comment: Plex Media Server
+    state: present
+    system: yes
+
+- name: rebase permissions
+  file:
+    path: "/usr/lib/plexmediaserver/"
+    owner: plex
+    group: plex
+    mode: 0744
+    recurse: yes
+
+- name: reload systemd daemon
+  shell: systemctl daemon-reload
+
+- name: enable and start plexmediaserver
+  systemd:
+    state: started
+    enabled: yes
+    name: "plexmediaserver"
+

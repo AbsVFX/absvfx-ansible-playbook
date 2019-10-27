@@ -1,0 +1,30 @@
+---
+- name: detect UEFI capability
+  stat:
+    path: /sys/firmware/efi
+  register: efi_firmware_directory
+
+- name: set target disk information (UEFI)
+  set_fact:
+    root_disk_partition: 2
+    boot_disk_partition_path: "{{ root_device }}1"
+    root_disk_partition_path: "{{ root_device }}2"
+    root_disk_partition_table: gpt
+  when: efi_firmware_directory.stat.exists
+
+- name: set target disk information (BIOS)
+  set_fact:
+    root_disk_partition: 1
+    root_disk_partition_path: "{{ root_device }}1"
+    root_disk_partition_table: msdos
+  when: not efi_firmware_directory.stat.exists
+
+- include_tasks: filesystem.yml
+- include_tasks: archlinux.yml
+
+- name: reboot
+  reboot:
+
+- name: wait for uptime
+  wait_for_connection:
+    timeout: 300

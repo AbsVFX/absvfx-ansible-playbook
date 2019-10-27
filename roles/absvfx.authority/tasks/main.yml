@@ -1,0 +1,39 @@
+---
+- name: pull required docker images
+  docker_image:
+    name: "{{ item }}"
+    source: pull
+  loop:
+    - freeipa/freeipa-server
+  tags:
+    - install
+    - update
+
+- name: create redmine volumes
+  file:
+    path: "/opt/docker/absvfx_authority/data"
+    state: directory
+    mode: '0775'
+    owner: root
+    group: root
+  tags: install
+
+- name: write ipa install options
+  copy:
+    content: "--ds-password {{ nzb_primary_newsserver_password }} --admin-password {{ nzb_primary_newsserver_password }} --realm IPA.ABSVFX.XYZ --hostname
+ipa.absvfx.xyz --domain absvfx.xyz"
+    dest: /opt/docker/absvfx_authority/data/ipa-server-install-options
+
+- name: start freeipa docker image
+  docker_container:
+    name: absvfx_authority
+    image: freeipa/freeipa-server
+    state: started
+    recreate: yes
+    volumes:
+      - "/opt/docker/absvfx_authority/data:/data"
+    env:
+      IPA_SERVER_HOSTNAME: ipa.absvfx.xyz
+  tags:
+    - install
+    - update

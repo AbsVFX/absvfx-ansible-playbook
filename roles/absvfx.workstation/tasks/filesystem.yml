@@ -1,0 +1,87 @@
+---
+## PARTITIONING
+# Erase all partitions
+- name: query disk
+  parted:
+    device: "{{ root_device }}"
+    unit: MiB
+  register: root_device_info
+
+- name: erase disk
+  parted:
+    device: "{{ root_device }}"
+    number: "{{ item.num }}"
+    state: absent
+  loop: "{{ root_device_info.partitions }}"
+
+- name: remove system volume
+  lvg:
+    vg: root
+    state: absent
+
+# Create initial MBR
+- name: partition disk
+  parted:
+    device: "{{ root_device }}"
+    label: "{{ root_disk_partition_table }}"
+  when: efi_firmware_directory.stat.exists
+
+# Create boot partition
+- name: create boot partition (UEFI)
+  parted:
+    device: "{{ root_device }}"
+    label: "{{ root_disk_partition_table }}"
+    number: 1
+    part_end: 200MiB
+    state: present
+  when: efi_firmware_directory.stat.exists
+
+# Create root partition
+- name: create LVM partition
+  parted:
+    device: "{{ root_device }}"
+    label: "{{ root_disk_partition_table }}"
+    number: "{{ root_disk_partition }}"
+    flags: [ lvm ]
+    part_start: 200MiB
+    state: present
+
+## PREPARE LVM
+- name: create system volume group
+  lvg:
+    vg: system
+    pvs: "{{ root_disk_partition_path }}"
+    pesize: 32
+
+- name: create root logical volume
+  lvol:
+    vg: system
+    lv: root
+    size: +100%FREE
+    state: present
+
+## FORMAT PARTITIONS
+- name: format EFI partition (UEFI)
+  shell: "mkfs.fat -F32 {{ boot_disk_partition_path }}"
+  when: efi_firmware_directory.stat.exists
+  
+- name: format root partition
+  filesystem:
+    fstype: "{{ root_partition_format }}"
+    dev: /dev/system/root
+
+## MOUNT PARTITIONS
+- name: mount root partition
+  mount:
+    path: /mnt
+    src: /dev/system/root
+    fstype: "{{ root_partition_format }}"
+    state: mounted
+
+- name: mount boot partition (UEFI)
+  mount:
+    path: /mnt/boot
+    src: "{{ boot_disk_partition_path }}"
+    fstype: msdos
+    state: mounted
+  when: efi_firmware_directory.stat.exists

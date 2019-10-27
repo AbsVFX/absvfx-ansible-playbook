@@ -1,0 +1,67 @@
+---
+- name: pull required docker images
+  docker_image:
+    name: "{{ item }}"
+    source: pull
+  loop:
+    - ansible/awx_task
+    - ansible/awx_web
+    - postgres:latest
+  tags:
+    - install
+    - update
+
+- name: create redmine volumes
+  file:
+    path: "/opt/docker/absvfx_awx/{{ item }}"
+    state: directory
+    mode: '0775'
+    owner: root
+    group: root
+  loop:
+    - "postgres/data"
+  tags: install
+
+- name: start postgres docker image
+  docker_container:
+    name: absvfx_awx_db
+    image: postgres:latest
+    state: started
+    recreate: yes
+    networks:
+      - name: absvfx_dev
+        aliases:
+          - db.awx.absvfx.xyz
+    volumes:
+      - "/opt/docker/absvfx_awx/postgres/data:/var/lib/postgresql/data"
+    env:
+      POSTGRES_PASSWORD: awx
+      POSTGRES_USER: awx
+  tags:
+    - install
+    - update
+
+- name: render secret key
+  copy:
+    content: awxsecret
+    dest: /opt/docker/absvfx_awx/SECRET_KEY
+    mode: 0600
+
+- name: start awx web docker image
+  docker_container:
+    name: absvfx_awx
+    image: ansible/awx_web
+    state: started
+    recreate: yes
+    networks:
+      - name: absvfx_dev
+        aliases:
+          - awx.absvfx.xyz
+    ports:
+      - "8083:8052"
+    volumes:
+      - "/opt/docker/absvfx_awx/SECRET_KEY:/SECRET_KEY"
+  tags:
+    - install
+    - update
+    - test
