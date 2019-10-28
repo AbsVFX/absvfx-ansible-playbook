@@ -124,6 +124,10 @@
     - create_ca
 
 # GENERATE SSL CERTIFICATE
+- name: store target hostname
+  set_fact:
+    target_hostname: "{{ inventory_hostname }}"
+
 - name: select authority to use
   set_fact:
     target_authority_node: "{{ item }}"
@@ -131,7 +135,7 @@
 
 - name: generate ssl certificate keys
   openssl_privatekey:
-    path: "{{ root_authority_directory }}/intermediate/certs/{{ inventory_hostname }}.key.pem"
+    path: "{{ root_authority_directory }}/intermediate/certs/{{ target_hostname }}.key.pem"
     size: 2048
   delegate_to: "{{ target_authority_node }}"
   tags:
@@ -139,19 +143,19 @@
 
 - name: generate ssl certificate requests
   openssl_csr:
-    path: "{{ root_authority_directory }}/intermediate/certs/{{ inventory_hostname }}.csr.pem"
-    privatekey_path: "{{ root_authority_directory }}/intermediate/certs/{{ inventory_hostname }}.key.pem"
+    path: "{{ root_authority_directory }}/intermediate/certs/{{ target_hostname }}.csr.pem"
+    privatekey_path: "{{ root_authority_directory }}/intermediate/certs/{{ target_hostname }}.key.pem"
     country_name: "{{ root_authority_country }}"
     organization_name: "{{ root_authority_organization }}"
-    common_name: "{{ inventory_hostname }}"
+    common_name: "{{ target_hostname }}"
   delegate_to: "{{ target_authority_node }}"
   tags:
     - generate_certs
 
 - name: generate ssl certificate
   openssl_certificate:
-    path: "{{ root_authority_directory }}/intermediate/newcerts/{{ inventory_hostname }}.crt"
-    csr_path: "{{ root_authority_directory }}/intermediate/certs/{{ inventory_hostname }}.csr.pem"
+    path: "{{ root_authority_directory }}/intermediate/newcerts/{{ target_hostname }}.crt"
+    csr_path: "{{ root_authority_directory }}/intermediate/certs/{{ target_hostname }}.csr.pem"
     ownca_path: "{{ root_authority_directory }}/intermediate/certs/ca-chain.cert.pem"
     ownca_privatekey_path: "{{ root_authority_directory }}/intermediate/private/ca.key.pem"
     ownca_privatekey_passphrase: "{{ nzb_tertiary_newsserver_password }}"
@@ -165,27 +169,61 @@
     path: "/etc/absvfx/ssl/certs"
     state: directory
 
-- name: transfer ca certificate
-  synchronize:
+- name: transfer ca certificate (local)
+  fetch:
     src: "{{ root_authority_directory }}/intermediate/certs/ca-chain.cert.pem"
-    dest: "/etc/absvfx/ssl/certs/ca.crt"
+    dest: "/tmp/ca.crt"
+    remote_src: yes
+    flat: yes
   delegate_to: "{{ target_authority_node }}"
   tags:
     - generate_certs
 
-- name: transfer ssl key
-  synchronize:
-    src: "{{ root_authority_directory }}/intermediate/certs/{{ inventory_hostname }}.key.pem"
-    dest: "/etc/absvfx/ssl/certs/{{ inventory_hostname }}.key"
+- name: transfer ssl key (local)
+  fetch:
+    src: "{{ root_authority_directory }}/intermediate/certs/{{ target_hostname }}.key.pem"
+    dest: "/tmp/{{ target_hostname }}.key"
+    remote_src: yes
+    flat: yes
   delegate_to: "{{ target_authority_node }}"
   tags:
     - generate_certs
 
-- name: transfer ssl certificate
-  synchronize:
-    src: "{{ root_authority_directory }}/intermediate/newcerts/{{ inventory_hostname }}.crt"
-    dest: "/etc/absvfx/ssl/certs/{{ inventory_hostname }}.crt"
+- name: transfer ssl certificate (local)
+  fetch:
+    src: "{{ root_authority_directory }}/intermediate/newcerts/{{ target_hostname }}.crt"
+    dest: "/tmp/{{ target_hostname }}.crt"
+    remote_src: yes
+    flat: yes
   delegate_to: "{{ target_authority_node }}"
+  tags:
+    - generate_certs
+
+- name: transfer ca certificate
+  copy:
+    src: /tmp/ca.crt
+    dest: /etc/absvfx/ssl/certs/ca.crt
+  tags:
+    - generate_certs
+
+- name: transfer ssl key & cert
+  copy:
+    src: "/tmp/{{ target_hostname }}.{{ item }}"
+    dest: "/etc/absvfx/ssl/certs/{{ target_hostname }}.{{ item }}"
+  loop:
+    - crt
+    - key
+  tags:
+    - generate_certs
+
+- name: remove certificate data from /tmp
+  file:
+    state: absent
+    path: "/tmp/{{ item }}"
+  loop:
+    - ca.crt
+    - "{{ target_hostname }}.crt"
+    - "{{ target_hostname }}.key"
   tags:
     - generate_certs
 
@@ -196,6 +234,8 @@
     group: root
     mode: '1755'
   loop:
-    - "{{ inventory_hostname }}.crt"
-    - "{{ inventory_hostname }}.key"
+    - "{{ target_hostname }}.crt"
+    - "{{ target_hostname }}.key"
     - "ca.crt"
+  tags:
+    - generate_certs

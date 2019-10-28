@@ -39,6 +39,14 @@
   vars:
     common_name: docker.absvfx.xyz
 
+# Allow TLS Docker Connections through firewall
+- name: allow docker through firewall
+  firewalld:
+    port: 2376/tcp
+    permanent: yes
+    state: enabled
+    zone: public
+
 - name: reload systemd daemon
   shell: systemctl daemon-reload
   tags:

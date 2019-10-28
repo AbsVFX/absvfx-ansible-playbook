@@ -28,3 +28,10 @@
 - name: wait for uptime
   wait_for_connection:
     timeout: 300
+
+- name: install required packages
+  package:
+    state: present
+    name: "{{ item }}"
+  loop:
+    - openssh-askpass

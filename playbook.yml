@@ -1,57 +1,20 @@
 ---
+# Generate Certificate Authority, where the create_ca tag has been specified
 - hosts: authority
   become: yes
   gather_facts: yes
   roles:
     - role: absvfx.authority
+      tags:
+        - create_ca
+  tags:
+    - create_ca
 
-- hosts: mediaserver
-  connection: ssh
-  become: yes
-  gather_facts: yes
-  roles:
-    - role: absvfx.sonarr
-    - role: absvfx.radarr
-    - role: absvfx.plexmediaserver
-    - role: absvfx.nzbget
-
-- hosts: workstation
-  connection: ssh
-  become: yes
-  gather_facts: no
-  roles:
-    - role: absvfx.workstation
-
-- hosts: mailserver
-  connection: ssh
-  become: yes
-  gather_facts: yes
-  roles:
-    - role: absvfx.mail
-
-- hosts:
-    - webserver
-    - devserver
-  connection: ssh
-  become: yes
-  gather_facts: yes
-  roles:
-    - role: absvfx.webserver
-
+# Configure AbsVFX Dev Server
 - hosts: devserver
   connection: ssh
   become: yes
   gather_facts: yes
   roles:
-    - role: absvfx.kubernetes
     - role: absvfx.docker
-    - role: absvfx.jenkins
-    - role: absvfx.redmine
-    - role: absvfx.awx
-
-- hosts: webserver
-  connection: ssh
-  become: yes
-  gather_facts: yes
-  roles:
-    - role: absvfx.wordpress
+    - role: absvfx.kubernetes
