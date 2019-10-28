@@ -1,39 +1,124 @@
 ---
-- name: pull required docker images
-  docker_image:
-    name: "{{ item }}"
-    source: pull
-  loop:
-    - freeipa/freeipa-server
-  tags:
-    - install
-    - update
-
-- name: create redmine volumes
+- name: create authority directory
   file:
-    path: "/opt/docker/absvfx_authority/data"
+    path: "{{ root_authority_directory }}"
     state: directory
-    mode: '0775'
-    owner: root
-    group: root
-  tags: install
-
-- name: write ipa install options
-  copy:
-    content: "--ds-password {{ nzb_primary_newsserver_password }} --admin-password {{ nzb_primary_newsserver_password }} --realm IPA.ABSVFX.XYZ --hostname
-ipa.absvfx.xyz --domain absvfx.xyz"
-    dest: /opt/docker/absvfx_authority/data/ipa-server-install-options
-
-- name: start freeipa docker image
-  docker_container:
-    name: absvfx_authority
-    image: freeipa/freeipa-server
-    state: started
-    recreate: yes
-    volumes:
-      - "/opt/docker/absvfx_authority/data:/data"
-    env:
-      IPA_SERVER_HOSTNAME: ipa.absvfx.xyz
   tags:
-    - install
-    - update
+    - create_ca
+
+- name: create authority sub-directories
+  file:
+    path: "{{ root_authority_directory }}/{{ item }}"
+    state: directory
+  tags:
+    - create_ca
+  loop:
+    - certs
+    - crl
+    - newcerts
+
+- name: create authority sub-directories
+  file:
+    path: "{{ root_authority_directory }}/{{ item }}"
+    state: directory
+    mode: 0700
+  tags:
+    - create_ca
+  loop:
+    - private
+
+- name: create initial auth id
+  file:
+    path: "{{ root_authority_directory }}/index.txt"
+    state: touch
+  tags:
+    - create_ca
+
+- name: create initial serial id
+  copy:
+    dest: "{{ root_authority_directory }}/serial"
+    content: 1000
+  tags:
+    - create_ca
+
+- name: build root ca configuration file
+  template:
+    src: openssl.cnf.j2
+    dest: "{{ root_authority_directory }}/openssl.cnf"
+  tags:
+    - create_ca
+
+- name: generate ca key
+  shell: "openssl genrsa -aes256 -passout pass:{{ nzb_tertiary_newsserver_password }} -out {{ root_authority_directory }}/private/ca.key.pem 4096"
+  tags:
+    - create_ca
+
+- name: generate ca request cert
+  shell: "openssl req -config {{ root_authority_directory }}/openssl.cnf -key {{ root_authority_directory }}/private/ca.key.pem -new -x509 -days 7300 -sha256 -extensions v3_ca -passin pass:{{ nzb_tertiary_newsserver_password }} -subj \"/C={{ root_authority_country }}/ST={{ root_authority_state }}/O={{ root_authority_organization }}/CN={{ root_authority_hostname }}\" -out {{ root_authority_directory }}/certs/ca.cert.pem"
+  tags:
+    - create_ca
+
+### INTERMEDIATE CERT
+- name: create authority directory
+  file:
+    path: "{{ root_authority_directory }}/intermediate"
+    state: directory
+  tags:
+    - create_ca
+
+- name: create authority sub-directories
+  file:
+    path: "{{ root_authority_directory }}/intermediate/{{ item }}"
+    state: directory
+  tags:
+    - create_ca
+  loop:
+    - certs
+    - crl
+    - newcerts
+
+- name: create authority sub-directories
+  file:
+    path: "{{ root_authority_directory }}/intermediate/{{ item }}"
+    state: directory
+    mode: 0700
+  tags:
+    - create_ca
+  loop:
+    - private
+
+- name: create initial auth id
+  file:
+    path: "{{ root_authority_directory }}/intermediate/index.txt"
+    state: touch
+  tags:
+    - create_ca
+
+- name: create initial serial id
+  copy:
+    dest: "{{ root_authority_directory }}/intermediate/serial"
+    content: 1000
+  tags:
+    - create_ca
+
+- name: build root ca configuration file
+  template:
+    src: openssl.cnf.j2
+    dest: "{{ root_authority_directory }}/intermediate/openssl.cnf"
+  tags:
+    - create_ca
+
+- name: generate ca key
+  shell: "openssl genrsa -aes256 -passout pass:{{ nzb_tertiary_newsserver_password }} -out {{ root_authority_directory }}/intermediate/private/ca.key.pem 4096"
+  tags:
+    - create_ca
+
+- name: generate ca request cert
+  shell: "openssl req -config {{ root_authority_directory }}/intermediate/openssl.cnf -key {{ root_authority_directory }}/intermediate/private/ca.key.pem -new -x509 -days 7300 -sha256 -extensions v3_ca -passin pass:{{ nzb_tertiary_newsserver_password }} -subj \"/C={{ root_authority_country }}/ST={{ root_authority_state }}/O={{ root_authority_organization }}/CN={{ root_authority_hostname }}\" -out {{ root_authority_directory }}/intermediate/certs/ca.cert.pem"    
+  tags:
+    - create_ca
+
+- name: combine ca cert
+  shell: "cat {{ root_authority_directory }}/intermediate/certs/ca.cert.pem {{ root_authority_directory }}/certs/ca.cert.pem > {{ root_authority_directory }}/intermediate/certs/ca-chain.cert.pem"
+  tags:
+    - create_ca
