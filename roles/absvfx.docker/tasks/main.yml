@@ -6,8 +6,6 @@
     apply:
       tags:
         - generate_certs
-  vars:
-    common_name: docker.absvfx.xyz
 
 - name: add docker-ce yum repository
   shell: yum-config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
@@ -24,10 +22,26 @@
     - install
     - update
 
+# Copy systemd Service
+- name: copy docker systemd service
+  copy:
+    src: /usr/lib/systemd/system/docker.service
+    dest: /etc/systemd/system/docker.service
+
+# Modify systemd service for listening on TLS
+- name: allow tls connections
+  lineinfile:
+    path: /etc/systemd/system/docker.service
+    regexp: '^ExecStart='
+    line: "ExecStart=/usr/bin/dockerd -H {{ inventory_hostname }}:2376 --tlsverify --tlscacert=/etc/absvfx/ssl/certs/ca.crt --tlscert=/etc/absvfx/ssl/certs/{{ inventory_hostname }}.crt --tlskey=/etc/absvfx/ssl/certs/{{ inventory_hostname }}.key"
+  tags:
+    - update
+  vars:
+    common_name: docker.absvfx.xyz
+
 - name: reload systemd daemon
   shell: systemctl daemon-reload
   tags:
-    - install
     - update
 
 - name: enable and start docker

@@ -131,7 +131,7 @@
 
 - name: generate ssl certificate keys
   openssl_privatekey:
-    path: "{{ root_authority_directory }}/intermediate/certs/{{ common_name }}.key.pem"
+    path: "{{ root_authority_directory }}/intermediate/certs/{{ inventory_hostname }}.key.pem"
     size: 2048
   delegate_to: "{{ target_authority_node }}"
   tags:
@@ -139,19 +139,19 @@
 
 - name: generate ssl certificate requests
   openssl_csr:
-    path: "{{ root_authority_directory }}/intermediate/certs/{{ common_name }}.csr.pem"
-    privatekey_path: "{{ root_authority_directory }}/intermediate/certs/{{ common_name }}.key.pem"
+    path: "{{ root_authority_directory }}/intermediate/certs/{{ inventory_hostname }}.csr.pem"
+    privatekey_path: "{{ root_authority_directory }}/intermediate/certs/{{ inventory_hostname }}.key.pem"
     country_name: "{{ root_authority_country }}"
     organization_name: "{{ root_authority_organization }}"
-    common_name: "{{ common_name }}"
+    common_name: "{{ inventory_hostname }}"
   delegate_to: "{{ target_authority_node }}"
   tags:
     - generate_certs
 
 - name: generate ssl certificate
   openssl_certificate:
-    path: "{{ root_authority_directory }}/intermediate/newcerts/{{ common_name }}.crt"
-    csr_path: "{{ root_authority_directory }}/intermediate/certs/{{ common_name }}.csr.pem"
+    path: "{{ root_authority_directory }}/intermediate/newcerts/{{ inventory_hostname }}.crt"
+    csr_path: "{{ root_authority_directory }}/intermediate/certs/{{ inventory_hostname }}.csr.pem"
     ownca_path: "{{ root_authority_directory }}/intermediate/certs/ca-chain.cert.pem"
     ownca_privatekey_path: "{{ root_authority_directory }}/intermediate/private/ca.key.pem"
     ownca_privatekey_passphrase: "{{ nzb_tertiary_newsserver_password }}"
@@ -173,10 +173,29 @@
   tags:
     - generate_certs
 
-- name: transfer ssl certificate
+- name: transfer ssl key
   synchronize:
-    src: "{{ root_authority_directory }}/intermediate/newcerts/{{ common_name }}.crt"
-    dest: "/etc/absvfx/ssl/certs/{{ common_name }}.crt"
+    src: "{{ root_authority_directory }}/intermediate/certs/{{ inventory_hostname }}.key.pem"
+    dest: "/etc/absvfx/ssl/certs/{{ inventory_hostname }}.key"
   delegate_to: "{{ target_authority_node }}"
   tags:
     - generate_certs
+
+- name: transfer ssl certificate
+  synchronize:
+    src: "{{ root_authority_directory }}/intermediate/newcerts/{{ inventory_hostname }}.crt"
+    dest: "/etc/absvfx/ssl/certs/{{ inventory_hostname }}.crt"
+  delegate_to: "{{ target_authority_node }}"
+  tags:
+    - generate_certs
+
+- name: set certificate permissions
+  file:
+    path: "/etc/absvfx/ssl/certs/{{ item }}"
+    owner: root
+    group: root
+    mode: '1755'
+  loop:
+    - "{{ inventory_hostname }}.crt"
+    - "{{ inventory_hostname }}.key"
+    - "ca.crt"
