@@ -1,4 +1,14 @@
 ---
+# Generate SSL Certificates for Docker
+- name: generate docker ssl certs
+  include_role:
+    name: absvfx.authority
+    apply:
+      tags:
+        - generate_certs
+  vars:
+    common_name: docker.absvfx.xyz
+
 - name: add docker-ce yum repository
   shell: yum-config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
   args:

@@ -122,3 +122,61 @@
   shell: "cat {{ root_authority_directory }}/intermediate/certs/ca.cert.pem {{ root_authority_directory }}/certs/ca.cert.pem > {{ root_authority_directory }}/intermediate/certs/ca-chain.cert.pem"
   tags:
     - create_ca
+
+# GENERATE SSL CERTIFICATE
+- name: select authority to use
+  set_fact:
+    target_authority_node: "{{ item }}"
+  with_random_choice: "{{ groups['authority'] }}"
+
+- name: generate ssl certificate keys
+  openssl_privatekey:
+    path: "{{ root_authority_directory }}/intermediate/certs/{{ common_name }}.key.pem"
+    size: 2048
+  delegate_to: "{{ target_authority_node }}"
+  tags:
+    - generate_certs
+
+- name: generate ssl certificate requests
+  openssl_csr:
+    path: "{{ root_authority_directory }}/intermediate/certs/{{ common_name }}.csr.pem"
+    privatekey_path: "{{ root_authority_directory }}/intermediate/certs/{{ common_name }}.key.pem"
+    country_name: "{{ root_authority_country }}"
+    organization_name: "{{ root_authority_organization }}"
+    common_name: "{{ common_name }}"
+  delegate_to: "{{ target_authority_node }}"
+  tags:
+    - generate_certs
+
+- name: generate ssl certificate
+  openssl_certificate:
+    path: "{{ root_authority_directory }}/intermediate/newcerts/{{ common_name }}.crt"
+    csr_path: "{{ root_authority_directory }}/intermediate/certs/{{ common_name }}.csr.pem"
+    ownca_path: "{{ root_authority_directory }}/intermediate/certs/ca-chain.cert.pem"
+    ownca_privatekey_path: "{{ root_authority_directory }}/intermediate/private/ca.key.pem"
+    ownca_privatekey_passphrase: "{{ nzb_tertiary_newsserver_password }}"
+    provider: ownca
+  delegate_to: "{{ target_authority_node }}"
+  tags:
+    - generate_certs
+
+- name: create directory structure if missing
+  file:
+    path: "/etc/absvfx/ssl/certs"
+    state: directory
+
+- name: transfer ca certificate
+  synchronize:
+    src: "{{ root_authority_directory }}/intermediate/certs/ca-chain.cert.pem"
+    dest: "/etc/absvfx/ssl/certs/ca.crt"
+  delegate_to: "{{ target_authority_node }}"
+  tags:
+    - generate_certs
+
+- name: transfer ssl certificate
+  synchronize:
+    src: "{{ root_authority_directory }}/intermediate/newcerts/{{ common_name }}.crt"
+    dest: "/etc/absvfx/ssl/certs/{{ common_name }}.crt"
+  delegate_to: "{{ target_authority_node }}"
+  tags:
+    - generate_certs
