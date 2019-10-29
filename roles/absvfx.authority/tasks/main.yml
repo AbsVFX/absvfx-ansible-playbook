@@ -57,6 +57,7 @@
 - name: store target hostname
   set_fact:
     target_hostname: "{{ inventory_hostname }}"
+  when: target_hostname is not defined
 
 # Randomly select an available authority node for use on further tasks
 - name: select authority to use

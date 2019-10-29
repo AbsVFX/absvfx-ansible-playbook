@@ -16,5 +16,11 @@
   become: yes
   gather_facts: yes
   roles:
-    - role: absvfx.docker
+#    - role: absvfx.docker
+#    - role: absvfx.registry
+#      vars:
+#        target_hostname: registry.absvfx.xyz
+    - role: absvfx.jenkins
+      vars:
+        target_hostname: ci.absvfx.xyz
 #    - role: absvfx.kubernetes TODO: Implement functional kubeadm/kubectl install
