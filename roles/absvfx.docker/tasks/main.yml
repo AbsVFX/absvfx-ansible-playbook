@@ -33,11 +33,17 @@
   lineinfile:
     path: /etc/systemd/system/docker.service
     regexp: '^ExecStart='
-    line: "ExecStart=/usr/bin/dockerd -H {{ inventory_hostname }}:2376 --tlsverify --tlscacert=/etc/absvfx/ssl/certs/ca.crt --tlscert=/etc/absvfx/ssl/certs/{{ inventory_hostname }}.crt --tlskey=/etc/absvfx/ssl/certs/{{ inventory_hostname }}.key"
+    line: "ExecStart=/usr/bin/dockerd -H fd:// -H {{ inventory_hostname }}:2376 --tlsverify --tlscacert=/etc/absvfx/ssl/certs/ca.crt --tlscert=/etc/absvfx/ssl/certs/{{ inventory_hostname }}.crt --tlskey=/etc/absvfx/ssl/certs/{{ inventory_hostname }}.key"
   tags:
     - update
   vars:
     common_name: docker.absvfx.xyz
+
+# Change cgroup driver from cgroupfs to systemd
+- name: apply custom docker daemon config
+  template:
+    src: "daemon.json.j2"
+    dest: "/etc/docker/daemon.json"
 
 # Allow TLS Docker Connections through firewall
 - name: allow docker through firewall
@@ -45,7 +51,7 @@
     port: 2376/tcp
     permanent: yes
     state: enabled
-    zone: public
+    zone: vpn
 
 - name: reload systemd daemon
   shell: systemctl daemon-reload
@@ -73,58 +79,3 @@
     - update
 
 #- include_tasks: backup.yml
-- name: obtain datetime
-  shell: "date +%Y%m%d-%H%M%S"
-  register: time
-  tags: backup
-  when: docker_containers is defined
-
-- name: save current state of container
-  shell: "docker export {{ item.container_name }} > /tmp/{{ item.container_name }}_container_{{ time.stdout }}.tgz"
-  loop:
-    "{{ docker_containers|list }}"
-  tags: backup
-  when: docker_containers is defined
-
-- name: copy container backups
-  fetch:
-    src: "/tmp/{{ item.container_name }}_container_{{ time.stdout }}.tgz"
-    dest: "{{ backup_directory }}"
-  loop:
-    "{{ docker_containers|list }}"
-  tags: backup
-  when: docker_containers is defined
-
-- name: remove container backups from node
-  file:
-    path: "/tmp/{{ item.container_name }}_container_{{ time.stdout }}.tgz"
-    state: absent
-  loop:
-    "{{ docker_containers|list }}"
-  tags: backup
-  when: docker_containers is defined
-
-- name: compress container volumes
-  archive:
-    path: "/opt/docker/{{ item.container_name }}"
-    dest: "/tmp/{{ item.container_name }}_volume_{{ time.stdout }}.tgz"
-  tags: backup
-  when: docker_containers is defined
-
-- name: copy container volumes
-  fetch:
-    src: "/tmp/{{ item.container_name }}_volume_{{ time.stdout }}.tgz"
-    dest: "{{ backup_directory }}"
-  loop:
-    "{{ docker_containers|list }}"
-  tags: backup
-  when: docker_containers is defined
-
-- name: remove container volume backups from node
-  file:
-    path: "/tmp/{{ item.container_name }}_volume_{{ time.stdout }}.tgz"
-    state: absent
-  loop:
-    "{{ docker_containers|list }}"
-  tags: backup
-  when: docker_containers is defined

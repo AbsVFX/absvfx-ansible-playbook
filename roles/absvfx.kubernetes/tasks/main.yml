@@ -23,7 +23,17 @@
     name: "kubelet"
 
 - name: initialize k8s cluster
-  shell: kubeadm init
+  shell: kubeadm init --ignore-preflight-errors=Swap
+
+- name: allow kubernetes through firewall
+  firewalld:
+    port: "{{ item }}/tcp"
+    permanent: yes
+    state: enabled
+    zone: vpn
+  loop:
+    - 6443
+    - 10250
 
 - name: give root user access to k8s cluster
   file:

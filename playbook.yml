@@ -11,10 +11,10 @@
     - create_ca
 
 # Configure AbsVFX Dev Server
-- hosts: authority
+- hosts: devserver
   connection: ssh
   become: yes
   gather_facts: yes
   roles:
     - role: absvfx.docker
-    - role: absvfx.kubernetes
+#    - role: absvfx.kubernetes TODO: Implement functional kubeadm/kubectl install
