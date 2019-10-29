@@ -1,139 +1,71 @@
 ---
-- name: create authority directory
-  file:
-    path: "{{ root_authority_directory }}"
-    state: directory
+# Create Initial Directory Structure
+- include_tasks: populate.yml
+  vars:
+    authority_root: "{{ root_authority_directory }}"
+    openssl_configuration_template: openssl.cnf.j2
+
+# Generate Root CA Key
+- name: generate root ca key
+  openssl_privatekey:
+    path: "{{ root_authority_directory }}/private/ca.key.pem"
+    passphrase: "{{ nzb_tertiary_newsserver_password }}"
+    size: 4096
+    cipher: aes256
   tags:
     - create_ca
-
-- name: create authority sub-directories
-  file:
-    path: "{{ root_authority_directory }}/{{ item }}"
-    state: directory
-  tags:
-    - create_ca
-  loop:
-    - certs
-    - crl
-    - newcerts
-
-- name: create authority sub-directories
-  file:
-    path: "{{ root_authority_directory }}/{{ item }}"
-    state: directory
-    mode: 0700
-  tags:
-    - create_ca
-  loop:
-    - private
-
-- name: create initial auth id
-  file:
-    path: "{{ root_authority_directory }}/index.txt"
-    state: touch
-  tags:
-    - create_ca
-
-- name: create initial serial id
-  copy:
-    dest: "{{ root_authority_directory }}/serial"
-    content: 1000
-  tags:
-    - create_ca
-
-- name: build root ca configuration file
-  template:
-    src: openssl.cnf.j2
-    dest: "{{ root_authority_directory }}/openssl.cnf"
-  tags:
-    - create_ca
-
-- name: generate ca key
-  shell: "openssl genrsa -aes256 -passout pass:{{ nzb_tertiary_newsserver_password }} -out {{ root_authority_directory }}/private/ca.key.pem 4096"
-  tags:
-    - create_ca
-
-- name: generate ca request cert
+    
+# Generate Root CA Certificate
+# TODO: Modify openssl_crl / openssl_certificate module to allow custom configuration files
+- name: generate root ca certificate
   shell: "openssl req -config {{ root_authority_directory }}/openssl.cnf -key {{ root_authority_directory }}/private/ca.key.pem -new -x509 -days 7300 -sha256 -extensions v3_ca -passin pass:{{ nzb_tertiary_newsserver_password }} -subj \"/C={{ root_authority_country }}/ST={{ root_authority_state }}/O={{ root_authority_organization }}/CN={{ root_authority_hostname }}\" -out {{ root_authority_directory }}/certs/ca.cert.pem"
   tags:
     - create_ca
 
 ### INTERMEDIATE CERT
-- name: create authority directory
-  file:
-    path: "{{ root_authority_directory }}/intermediate"
-    state: directory
+# Create Initial Directory Structure
+- include_tasks: populate.yml
+  vars:
+    authority_root: "{{ root_authority_directory }}/intermediate"
+    openssl_configuration_template: intermediate.openssl.cnf.j2
+
+# Generate Intermediate CA Key
+- name: generate intermediate ca key
+  openssl_privatekey:
+    path: "{{ root_authority_directory }}/intermediate/private/ca.key.pem"
+    passphrase: "{{ nzb_tertiary_newsserver_password }}"
+    size: 4096
+    cipher: aes256
   tags:
     - create_ca
 
-- name: create authority sub-directories
-  file:
-    path: "{{ root_authority_directory }}/intermediate/{{ item }}"
-    state: directory
-  tags:
-    - create_ca
-  loop:
-    - certs
-    - crl
-    - newcerts
-
-- name: create authority sub-directories
-  file:
-    path: "{{ root_authority_directory }}/intermediate/{{ item }}"
-    state: directory
-    mode: 0700
-  tags:
-    - create_ca
-  loop:
-    - private
-
-- name: create initial auth id
-  file:
-    path: "{{ root_authority_directory }}/intermediate/index.txt"
-    state: touch
-  tags:
-    - create_ca
-
-- name: create initial serial id
-  copy:
-    dest: "{{ root_authority_directory }}/intermediate/serial"
-    content: 1000
-  tags:
-    - create_ca
-
-- name: build root ca configuration file
-  template:
-    src: openssl.cnf.j2
-    dest: "{{ root_authority_directory }}/intermediate/openssl.cnf"
-  tags:
-    - create_ca
-
-- name: generate ca key
-  shell: "openssl genrsa -aes256 -passout pass:{{ nzb_tertiary_newsserver_password }} -out {{ root_authority_directory }}/intermediate/private/ca.key.pem 4096"
-  tags:
-    - create_ca
-
-- name: generate ca request cert
+# Generate Intermediate CA Certificate
+# TODO: Modify openssl_crl / openssl_certificate module to allow custom configuration files
+- name: generate intermediate ca certificate
   shell: "openssl req -config {{ root_authority_directory }}/intermediate/openssl.cnf -key {{ root_authority_directory }}/intermediate/private/ca.key.pem -new -x509 -days 7300 -sha256 -extensions v3_ca -passin pass:{{ nzb_tertiary_newsserver_password }} -subj \"/C={{ root_authority_country }}/ST={{ root_authority_state }}/O={{ root_authority_organization }}/CN={{ root_authority_hostname }}\" -out {{ root_authority_directory }}/intermediate/certs/ca.cert.pem"    
   tags:
     - create_ca
 
+# Combine Root & Intermediate Certificate in to a single file
 - name: combine ca cert
   shell: "cat {{ root_authority_directory }}/intermediate/certs/ca.cert.pem {{ root_authority_directory }}/certs/ca.cert.pem > {{ root_authority_directory }}/intermediate/certs/ca-chain.cert.pem"
   tags:
     - create_ca
 
-# GENERATE SSL CERTIFICATE
+# GENERATE SERVER SSL CERTIFICATE
+# Request hostname of the node being targeted
 - name: store target hostname
   set_fact:
     target_hostname: "{{ inventory_hostname }}"
 
+# Randomly select an available authority node for use on further tasks
 - name: select authority to use
   set_fact:
     target_authority_node: "{{ item }}"
   with_random_choice: "{{ groups['authority'] }}"
 
-- name: generate ssl certificate keys
+# Generate Server SSL Key
+- name: generate ssl certificate key
   openssl_privatekey:
     path: "{{ root_authority_directory }}/intermediate/certs/{{ target_hostname }}.key.pem"
     size: 2048
@@ -141,7 +73,8 @@
   tags:
     - generate_certs
 
-- name: generate ssl certificate requests
+# Generate Server Certificate Request
+- name: generate ssl certificate request
   openssl_csr:
     path: "{{ root_authority_directory }}/intermediate/certs/{{ target_hostname }}.csr.pem"
     privatekey_path: "{{ root_authority_directory }}/intermediate/certs/{{ target_hostname }}.key.pem"
@@ -152,6 +85,7 @@
   tags:
     - generate_certs
 
+# Generate Server SSL Certificate
 - name: generate ssl certificate
   openssl_certificate:
     path: "{{ root_authority_directory }}/intermediate/newcerts/{{ target_hostname }}.crt"
@@ -164,11 +98,13 @@
   tags:
     - generate_certs
 
+# Create SSL Certificate Directory on node
 - name: create directory structure if missing
   file:
     path: "/etc/absvfx/ssl/certs"
     state: directory
 
+# Transfer ca certificate to the Ansible controller (to avoid rsync issues with the synchronize module)
 - name: transfer ca certificate (local)
   fetch:
     src: "{{ root_authority_directory }}/intermediate/certs/ca-chain.cert.pem"
@@ -179,6 +115,7 @@
   tags:
     - generate_certs
 
+# Transfer generated key to the Ansible controller (to avoid rsync issues with the synchronize module)
 - name: transfer ssl key (local)
   fetch:
     src: "{{ root_authority_directory }}/intermediate/certs/{{ target_hostname }}.key.pem"
@@ -189,6 +126,7 @@
   tags:
     - generate_certs
 
+# Transfer generated certificate to the Ansible controller (to avoid rsync issues with the synchronize module)
 - name: transfer ssl certificate (local)
   fetch:
     src: "{{ root_authority_directory }}/intermediate/newcerts/{{ target_hostname }}.crt"
@@ -199,6 +137,7 @@
   tags:
     - generate_certs
 
+# Transfer generated key to the remote node (to avoid rsync issues with the synchronize module)
 - name: transfer ca certificate
   copy:
     src: /tmp/ca.crt
@@ -206,6 +145,7 @@
   tags:
     - generate_certs
 
+# Transfer generated key & certificate to the remote node (to avoid rsync issues with the synchronize module)
 - name: transfer ssl key & cert
   copy:
     src: "/tmp/{{ target_hostname }}.{{ item }}"
@@ -216,6 +156,7 @@
   tags:
     - generate_certs
 
+# Clean up the local copy of data
 - name: remove certificate data from /tmp
   file:
     state: absent
@@ -227,6 +168,7 @@
   tags:
     - generate_certs
 
+# Grant access to the generated certificates to all users
 - name: set certificate permissions
   file:
     path: "/etc/absvfx/ssl/certs/{{ item }}"

@@ -11,7 +11,7 @@
     - create_ca
 
 # Configure AbsVFX Dev Server
-- hosts: devserver
+- hosts: authority
   connection: ssh
   become: yes
   gather_facts: yes
