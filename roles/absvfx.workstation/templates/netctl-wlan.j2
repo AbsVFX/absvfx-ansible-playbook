@@ -1,0 +1,10 @@
+Description='Wifi Connection to store connection to Ansible after reboot'
+Interface={{ wireless_interface }}
+Connection=wireless
+Security={{ home_wireless_security }}
+ESSID={{ home_wireless_ssid }}
+IP=static
+Address={{ home_wireless_ip }}/8
+Gateway={{ home_gateway }}
+DNS={{ home_wireless_dns }}
+Key={{ home_wireless_key }}

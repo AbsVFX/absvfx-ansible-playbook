@@ -1,0 +1,12 @@
+- name: create netctl directory
+  file:
+    path: /mnt/etc/netctl
+    state: directory
+
+- name: build wifi connection template
+  template:
+    src: netctl-wlan.j2
+    dest: "/mnt/etc/netctl/{{ wireless_interface }}-ansible"
+
+- name: enable ansible wifi template
+  shell: "arch-chroot /mnt /usr/bin/netctl enable {{ wireless_interface }}-ansible"

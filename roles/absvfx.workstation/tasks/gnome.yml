@@ -1,0 +1,14 @@
+---
+- name: install gnome
+  package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - gnome
+    - gdm
+
+- name: enable gnome
+  systemd:
+    state: started
+    enabled: yes
+    name: "gdm"
