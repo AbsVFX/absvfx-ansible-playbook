@@ -13,6 +13,7 @@
     number: "{{ item.num }}"
     state: absent
   loop: "{{ root_device_info.partitions }}"
+  ignore_errors: yes
 
 - name: remove system volume
   lvg:
@@ -64,7 +65,7 @@
 - name: format EFI partition (UEFI)
   shell: "mkfs.fat -F32 {{ boot_disk_partition_path }}"
   when: efi_firmware_directory.stat.exists
-  
+
 - name: format root partition
   filesystem:
     fstype: "{{ root_partition_format }}"

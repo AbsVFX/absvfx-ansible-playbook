@@ -1,6 +1,14 @@
 ---
+# ARCHLINUX BASE INSTALLATION
+#
+# This playbook describes a core installation of Arch Linux, requiring the
+# archlinux Boot CD. This should also work with the netboot distribution of
+# Arch.
+
+# If the booted up system is EFI-compatible, use pacstrap to install additional
+# requirements for EFI support
 - name: install arch linux base (UEFI)
-  shell: "pacstrap /mnt base linux linux-firmware lvm2 xfsprogs grub efibootmgr"
+  shell: "pacstrap /mnt base linux linux-firmware lvm2 xfsprogs grub efibootmgr openssh-askpass"
   when: efi_firmware_directory.stat.exists
   tags:
     - fresh
@@ -11,39 +19,24 @@
   tags:
     - fresh
 
+# Generate the fstab outside the context of the target root filesystem
 - name: generate fstab
-  shell: "genfstab -U /mnt >> /mnt/etc/fstab"
+  shell: "genfstab -U /mnt > /mnt/etc/fstab"
 
+# Set timezone on system based upon variables defined in the inventory file
 - name: symlink timezone
-  shell: "arch-chroot /mnt /usr/bin/ln -sfv /usr/share/zoneinfo/Europe/London /etc/localtime"
+  shell: "arch-chroot /mnt /usr/bin/ln -sfv /usr/share/zoneinfo/{{ timezone }} /etc/localtime"
 
+# Set hostname on system based upon hostname defined in the inventory file
 - name: set hostname
   copy:
     dest: /mnt/etc/hostname
-    content: ws
+    content: {{ inventory_hostname }}
 
-# BIND MOUND PARTITIONS
-- name: bind partitions from root
-  mount:
-    path: "/mnt/{{ item }}"
-    src: "/{{ item }}"
-    opts: bind
-    state: mounted
-    fstype: none
-  loop:
-    - dev
-    - dev/pts
-    - proc
-    - sys
-    - sys/firmware/efi/efivars
-    - run
-
-# ADJUST SYSTEM LOCALE
+# Set system locales based upon locales defined in the inventory file
 - name: uncomment requested languages
   blockinfile:
-    content: | 
-      fr_FR.UTF-8 UTF-8  
-      fr_FR ISO-8859-1  
+    content: "{{ locales }}"
     dest: /mnt/etc/locale.gen
 
 - name: generate locales
@@ -52,15 +45,17 @@
 - name: adjust hardware clock
   shell: "arch-chroot /mnt /usr/bin/hwclock --systohc"
 
-# CONFIGURE BOOT IMAGE
+# Configure initial image to include lvm2 module
 - name: configure mkinitcpio hooks
   shell: sed -i 's/block/block lvm2/' /mnt/etc/mkinitcpio.conf
 
-# GENERATE BOOT IMAGE
+# Generate boot image
 - name: generate kernel image
   shell: "arch-chroot /mnt /usr/bin/mkinitcpio -P"
 
-# INSTALL BOOT LOADER (GRUB)
+# If the booted system is EFI-compatible, install GRUB with a target of
+# x86_64-efi, specify the boot directory and specify a bootloader id to the
+# EFI system
 - name: install bootloader (UEFI)
   shell: "arch-chroot /mnt /usr/bin/grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB"
   when: efi_firmware_directory.stat.exists
@@ -69,6 +64,7 @@
   shell: "arch-chroot /mnt /usr/bin/grub-install --target=i386-pc {{ root_device }}"
   when: not efi_firmware_directory.stat.exists
 
+# Create grub configuration file
 - name: configure bootloader
   shell: "arch-chroot /mnt /usr/bin/grub-mkconfig -o /boot/grub/grub.cfg"
   ignore_errors: True

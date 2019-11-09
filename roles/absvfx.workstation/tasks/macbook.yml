@@ -1,0 +1,17 @@
+---
+- name: unload wireless modules
+  modprobe:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - b43
+    - ssb
+    - bcma
+    - wl
+  ignore_errors: yes
+
+- name: load wireless module
+  modprobe:
+    name: wl
+    state: present
+  ignore_errors: yes

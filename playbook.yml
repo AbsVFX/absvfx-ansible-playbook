@@ -24,3 +24,11 @@
       vars:
         target_hostname: ci.absvfx.xyz
 #    - role: absvfx.kubernetes TODO: Implement functional kubeadm/kubectl install
+
+# Configure AbsVFX Workstations
+- hosts: workstation
+  connection: ssh
+  become: yes
+  gather_facts: yes
+  roles:
+    - role: absvfx.workstation
