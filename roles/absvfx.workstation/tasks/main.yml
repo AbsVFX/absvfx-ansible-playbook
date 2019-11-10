@@ -3,62 +3,67 @@
   stat:
     path: /sys/firmware/efi
   register: efi_firmware_directory
+  tags:
+    - new_install
+    - efi
 
 - name: set target disk information (UEFI)
   set_fact:
     root_disk_partition: 2
-    boot_disk_partition_path: "{{ root_device }}1"
-    root_disk_partition_path: "{{ root_device }}2"
+    boot_disk_partition_path: "{{ root_device }}{{ root_device_postfix }}1"
+    root_disk_partition_path: "{{ root_device }}{{ root_device_postfix }}2"
     root_disk_partition_table: gpt
   when: efi_firmware_directory.stat.exists
+  tags:
+    - new_install
+    - efi
 
 - name: set target disk information (BIOS)
   set_fact:
     root_disk_partition: 1
-    root_disk_partition_path: "{{ root_device }}1"
+    root_disk_partition_path: "{{ root_device }}{{ root_device_postfix }}1"
     root_disk_partition_table: msdos
   when: not efi_firmware_directory.stat.exists
+  tags:
+    - new_install
+
+# Query Graphical Devices
+- name: detect VGA compatible Devices
+  shell: lspci | grep VGA
+  register: vga_devices
+  tags:
+    - new_install
+    - provision
 
 - include_tasks: filesystem.yml
   tags:
+    - bare
     - new_install
+    - filesystem
+    - efi
 - include_tasks: macbook.yml
   tags:
+    - bare
     - new_install
   when: macbook is defined
 
 # TODO: Detect if booted image is that of Arch Linux
 - include_tasks: archlinux.yml
   tags:
+    - bare
     - new_install
+    - efi
+  when: ansible_facts['distribution'] == "Archlinux"
 
 - include_tasks: network.yml
   tags:
+    - bare
     - new_install
-  when: wireless is defined
 
 - name: reboot
   reboot:
   tags:
-    - new_install
-
-# Clear local cache of host keys
-- name: clear known hosts entry for remote machine
-  local_action: lineinfile
-  become: no
-  args:
-    path: ~/.ssh/known_hosts
-    state: absent
-    regexp: "{{ ansible_default_ipv4.address }}(.?)+$"
-
-- name: add remote machine to known hosts file
-  local_action: "shell root@{{ inventory_hostname }}"
-  become: no
-
-- name: wait for uptime
-  wait_for_connection:
-    timeout: 300
-  tags:
+    - bare
     - new_install
 
 - name: install required packages
@@ -66,17 +71,100 @@
     state: present
     name: "{{ item }}"
   loop:
-    - docker
     - htop
+  tags:
+    - provision
+    - new_install
 
-- name: install required video drivers
+# Based upon the VGA queries earlier
+- name: install VMWare video drivers
   package:
     name: "{{ item }}"
     state: present
-  loop:
-    - mesa
-    - "{{ graphics_driver }}"
-    - "{{ vulkan_graphics_driver }}"
-    - "{{ vaapi_driver }}"
+  loop: "{{ vmware_graphics_packages }}"
+  tags:
+    - provision
+    - new_install
+  when: vga_devices.stdout.find('VMware') != -1
+
+- name: install NVIDIA video drivers
+  package:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ nvidia_packages }}"
+  tags:
+    - provision
+    - new_install
+  when: vga_devices.stdout.find('NVIDIA') != -1
+
+- name: install AMD video drivers
+  package:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ amd_packages }}"
+  tags:
+    - provision
+    - new_install
+  when: vga_devices.stdout.find('Advanced Micro Devices, Inc.') != -1
+
+- name: install intel video drivers
+  package:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ intel_graphics_packages }}"
+  tags:
+    - provision
+    - new_install
+  when: vga_devices.stdout.find('Intel Corporation') != -1
 
 - include_tasks: gnome.yml
+  tags:
+    - provision
+    - new_install
+
+# TODO: This will eventually pull from the AbsVFX Dev infrastructure, as open-
+# source applications only will be listed in these packages, these can be
+# periodically built via the Jenkins server and released to a custom
+# pacman & yum repository
+- name: install required packages
+  package:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ required_packages }}"
+  tags:
+    - provision
+    - new_install
+
+# TODO: This will eventually pull from the AbsVFX Dev infrastructure, as open-
+# source applications only will be listed in these packages, these can be
+# periodically built via the Jenkins server and released to a custom
+# pacman & yum repository
+- name: install graphical applications
+  package:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ graphical_applications }}"
+  tags:
+    - provision
+    - new_install
+
+- name: create local users
+  user:
+    comment: "{{ item.comment }}"
+    create_home: yes
+    generate_ssh_key: yes
+    local: no
+    name: "{{ item.username }}"
+    password: "{{ item.password | password_hash('sha512', 'mysecretsalt') }}"
+    shell: /usr/bin/zsh
+    ssh_key_bits: 4096
+    ssh_key_comment: "AbsVFX SSH Key for user {{ item.username }}"
+  loop: "{{ local_users }}"
+  when: local_users is defined
+  tags:
+    - new_install
+    - create_users
+
+- include_tasks: secure.yml
+  tags:
+    - secure

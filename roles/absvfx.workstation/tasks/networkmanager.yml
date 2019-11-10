@@ -1,0 +1,30 @@
+---
+- name: install networkmanager
+  package:
+    name:
+      - networkmanager
+      - networkmanager-openvpn
+    state: present
+  tags:
+    - test
+
+- name: enable networkmanager
+  systemd:
+    state: started
+    enabled: yes
+    name: "NetworkManager"
+  tags:
+    - test
+
+- name: store connection in NetworkManager
+  nmcli:
+    conn_name: default
+    type: generic
+    ifname: "{{ wireless_interface }}"
+    dns4: 1.1.1.1
+    ip4: "{{ home_wireless_ip }}/8"
+    gw4: "{{ home_gateway }}"
+    autoconnect: yes
+    state: present
+  tags:
+    - test

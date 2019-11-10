@@ -1,0 +1,8 @@
+[Unit]
+Description=Ansible Temporary Network
+
+[Service]
+ExecStart=/bin/bash /usr/local/bin/ansible-network.sh
+
+[Install]
+WantedBy=multi-user.target

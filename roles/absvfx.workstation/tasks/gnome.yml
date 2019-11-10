@@ -7,6 +7,12 @@
     - gnome
     - gdm
 
+- name: configure gnome
+  template:
+    src: gtk3.settings.ini.j2
+    dest: /etc/gtk-3.0/settings.ini
+  tags: test
+
 - name: enable gnome
   systemd:
     state: started

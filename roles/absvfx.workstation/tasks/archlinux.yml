@@ -8,7 +8,7 @@
 # If the booted up system is EFI-compatible, use pacstrap to install additional
 # requirements for EFI support
 - name: install arch linux base (UEFI)
-  shell: "pacstrap /mnt base linux linux-firmware lvm2 xfsprogs grub efibootmgr openssh-askpass wpa_supplicant netctl broadcom-wl python"
+  shell: "pacstrap /mnt base linux linux-firmware lvm2 xfsprogs grub efibootmgr openssh-askpass wpa_supplicant netctl broadcom-wl python dhcpcd"
   when: efi_firmware_directory.stat.exists
   tags:
     - fresh
@@ -60,6 +60,21 @@
   shell: "arch-chroot /mnt /bin/bash -c ' /usr/bin/grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB'"
   when: efi_firmware_directory.stat.exists
 
+- name: create standard efi boot directory (UEFI)
+  file:
+    path: /mnt/efi/efi/boot
+    state: directory
+  when: efi_firmware_directory.stat.exists
+  tags: efi
+
+- name: copy boot files to EFI partition (UEFI)
+  copy:
+    src: /mnt/efi/efi/grub/grubx64.efi
+    dest: /mnt/efi/efi/boot/bootx64.efi
+    remote_src: yes
+  when: efi_firmware_directory.stat.exists
+  tags: efi
+
 - name: install bootloader (BIOS)
   shell: "arch-chroot /mnt /bin/bash -c ' /usr/bin/grub-install --target=i386-pc {{ root_device }}'"
   when: not efi_firmware_directory.stat.exists
@@ -76,6 +91,6 @@
 # Allow root access via ssh & password
 - name: configure sshd
   shell: sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /mnt/etc/ssh/sshd_config
-
+# echo user:pass | /usr/sbin/chpasswd
 - name: set temporary root password
-  shell: arch-chroot /mnt /bin/bash -c "echo 'root\nroot' | passwd --stdin root"
+  shell: arch-chroot /mnt /bin/bash -c "echo root:root | /usr/sbin/chpasswd"

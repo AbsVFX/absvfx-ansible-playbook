@@ -1,0 +1,11 @@
+# Assign Interface Static IP
+ip a add {{ ansible_default_ipv4.address }}/8 dev {{ wired_interface }}
+
+# Bring interface up
+ip link set up {{ wired_interface }}
+
+# Reserve DNS Pointer
+echo "nameserver {{ home_wireless_dns }}" > /etc/resolv.conf
+
+# Add gateway to interface
+ip r add default via {{ home_gateway }}

@@ -7,6 +7,24 @@
   template:
     src: netctl-wlan.j2
     dest: "/mnt/etc/netctl/{{ wireless_interface }}-ansible"
+  when: wireless_interface is defined
+
+- name: build wired connection unit file
+  template:
+    src: ansible-network.service.j2
+    dest: "/mnt/etc/systemd/system/ansible-network.service"
+  when: wired_interface is defined
 
 - name: enable ansible wifi template
   shell: "arch-chroot /mnt /usr/bin/netctl enable {{ wireless_interface }}-ansible"
+  when: wireless_interface is defined
+
+- name: enable ansible wired template
+  shell: "arch-chroot /mnt /usr/bin/systemctl enable ansible-network.service"
+  when: wired_interface is defined
+
+- name: copy ansible network script
+  template:
+    src: ansible-network.sh.j2
+    dest: "/mnt/usr/local/bin/ansible-network.sh"
+  when: wired_interface is defined

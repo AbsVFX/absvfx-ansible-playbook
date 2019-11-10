@@ -16,6 +16,7 @@
   ignore_errors: yes
   tags:
     - new_install
+    - disk_partition
 
 - name: remove system volume
   lvg:
@@ -23,6 +24,7 @@
     state: absent
   tags:
     - new_install
+    - disk_partition
 
 # Create initial MBR
 - name: partition disk
@@ -32,6 +34,7 @@
   when: efi_firmware_directory.stat.exists
   tags:
     - new_install
+    - disk_partition
 
 # Create boot partition
 - name: create boot partition (UEFI)
@@ -39,11 +42,13 @@
     device: "{{ root_device }}"
     label: "{{ root_disk_partition_table }}"
     number: 1
+    flags: [ esp ]
     part_end: 200MiB
     state: present
   when: efi_firmware_directory.stat.exists
   tags:
     - new_install
+    - disk_partition
 
 # Create root partition
 - name: create LVM partition
@@ -56,6 +61,7 @@
     state: present
   tags:
     - new_install
+    - disk_partition
 
 ## PREPARE LVM
 - name: create system volume group
@@ -65,6 +71,7 @@
     pesize: 32
   tags:
     - new_install
+    - disk_partition
 
 - name: create root logical volume
   lvol:
@@ -74,6 +81,7 @@
     state: present
   tags:
     - new_install
+    - disk_partition
 
 ## FORMAT PARTITIONS
 - name: format EFI partition (UEFI)
@@ -81,6 +89,7 @@
   when: efi_firmware_directory.stat.exists
   tags:
     - new_install
+    - disk_partition
 
 - name: format root partition
   filesystem:
@@ -88,6 +97,7 @@
     dev: /dev/system/root
   tags:
     - new_install
+    - disk_partition
 
 ## MOUNT PARTITIONS
 - name: mount root partition
@@ -96,6 +106,9 @@
     src: /dev/system/root
     fstype: "{{ root_partition_format }}"
     state: mounted
+
+- name: clear mounted root drive
+  shell: rm -rf /mnt/*
 
 - name: create root directories
   file:
@@ -112,3 +125,15 @@
     fstype: msdos
     state: mounted
   when: efi_firmware_directory.stat.exists
+
+- name: clear mounted boot drive
+  shell: rm -rf /mnt/efi/*
+
+- name: mount additional storage
+  mount:
+    path: "/mnt/{{ item.key }}"
+    src: "{{ item.value }}"
+    fstype: "{{ root_partition_format }}"
+    state: mounted
+  loop: "{{ additional_storage|dict2items }}"
+  when: additional_storage is defined

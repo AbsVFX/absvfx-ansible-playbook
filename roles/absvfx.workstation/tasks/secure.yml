@@ -1,0 +1,19 @@
+---
+- name: add users to sudoers list
+  blockinfile:
+    path: /etc/sudoers
+    block: "{{ item.username }} ALL=(ALL) NOPASSWD: ALL"
+    marker: "# {mark} {{ item.username }} USER BLOCK"
+  loop: "{{ local_users }}"
+  tags:
+    - secure
+
+- name: remove root user password
+  shell: passwd -d root
+  tags:
+    - secure
+
+- name: lock access to root user
+  shell: passwd -l root
+  tags:
+    - secure
