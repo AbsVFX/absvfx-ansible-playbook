@@ -9,9 +9,41 @@
     - bcma
     - wl
   ignore_errors: yes
+  tags:
+    - new_install
 
 - name: load wireless module
   modprobe:
     name: wl
     state: present
   ignore_errors: yes
+  tags:
+    - new_install
+
+- name: create modprobe directory
+  file:
+    path: /mnt/etc/modprobe.d
+    state: directory
+
+- name: create modprobe blacklist file
+  file:
+    path: /mnt/etc/modprobe.d/blacklist.conf
+    state: touch
+
+- name: create wireless kernel module blacklist
+  blockinfile:
+    path: /mnt/etc/modprobe.d/blacklist.conf
+    block: "blacklist {{ item }}"
+    marker: "# {mark} {{ item }} WIRELESS MODULE BLOCK"
+  loop:
+    - b43
+    - ssb
+    - bcma
+
+- name: create wireless kernel module whitelist
+  blockinfile:
+    path: /mnt/etc/modprobe.d/10-{{ item }}.conf
+    block: "blacklist {{ item }}"
+    marker: "# {mark} {{ item }} WIRELESS MODULE BLOCK"
+  loop:
+    - wl

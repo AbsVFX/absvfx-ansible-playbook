@@ -8,7 +8,7 @@
 # If the booted up system is EFI-compatible, use pacstrap to install additional
 # requirements for EFI support
 - name: install arch linux base (UEFI)
-  shell: "pacstrap /mnt base linux linux-firmware lvm2 xfsprogs grub efibootmgr openssh-askpass"
+  shell: "pacstrap /mnt base linux linux-firmware lvm2 xfsprogs grub efibootmgr openssh-askpass wpa_supplicant netctl broadcom-wl python"
   when: efi_firmware_directory.stat.exists
   tags:
     - fresh
@@ -25,13 +25,13 @@
 
 # Set timezone on system based upon variables defined in the inventory file
 - name: symlink timezone
-  shell: "arch-chroot /mnt /usr/bin/ln -sfv /usr/share/zoneinfo/{{ timezone }} /etc/localtime"
+  shell: "arch-chroot /mnt /bin/bash -c ' /usr/bin/ln -sfv /usr/share/zoneinfo/{{ timezone }} /etc/localtime'"
 
 # Set hostname on system based upon hostname defined in the inventory file
 - name: set hostname
   copy:
     dest: /mnt/etc/hostname
-    content: {{ inventory_hostname }}
+    content: "{{ inventory_hostname }}"
 
 # Set system locales based upon locales defined in the inventory file
 - name: uncomment requested languages
@@ -40,10 +40,10 @@
     dest: /mnt/etc/locale.gen
 
 - name: generate locales
-  shell: "arch-chroot /mnt /usr/bin/locale-gen"
+  shell: "arch-chroot /mnt /bin/bash -c ' /usr/bin/locale-gen'"
 
 - name: adjust hardware clock
-  shell: "arch-chroot /mnt /usr/bin/hwclock --systohc"
+  shell: "arch-chroot /mnt /bin/bash -c ' /usr/bin/hwclock --systohc'"
 
 # Configure initial image to include lvm2 module
 - name: configure mkinitcpio hooks
@@ -51,20 +51,31 @@
 
 # Generate boot image
 - name: generate kernel image
-  shell: "arch-chroot /mnt /usr/bin/mkinitcpio -P"
+  shell: "arch-chroot /mnt /bin/bash -c ' /usr/bin/mkinitcpio -P'"
 
 # If the booted system is EFI-compatible, install GRUB with a target of
 # x86_64-efi, specify the boot directory and specify a bootloader id to the
 # EFI system
 - name: install bootloader (UEFI)
-  shell: "arch-chroot /mnt /usr/bin/grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB"
+  shell: "arch-chroot /mnt /bin/bash -c ' /usr/bin/grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB'"
   when: efi_firmware_directory.stat.exists
 
 - name: install bootloader (BIOS)
-  shell: "arch-chroot /mnt /usr/bin/grub-install --target=i386-pc {{ root_device }}"
+  shell: "arch-chroot /mnt /bin/bash -c ' /usr/bin/grub-install --target=i386-pc {{ root_device }}'"
   when: not efi_firmware_directory.stat.exists
 
 # Create grub configuration file
 - name: configure bootloader
-  shell: "arch-chroot /mnt /usr/bin/grub-mkconfig -o /boot/grub/grub.cfg"
+  shell: "arch-chroot /mnt /bin/bash -c ' /usr/bin/grub-mkconfig -o /boot/grub/grub.cfg'"
   ignore_errors: True
+
+# Enable SSH Server on remote machine
+- name: enable ssh
+  shell: "arch-chroot /mnt /bin/bash -c '/usr/bin/systemctl enable sshd'"
+
+# Allow root access via ssh & password
+- name: configure sshd
+  shell: sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /mnt/etc/ssh/sshd_config
+
+- name: set temporary root password
+  shell: arch-chroot /mnt /bin/bash -c "echo 'root\nroot' | passwd --stdin root"
