@@ -1,17 +1,18 @@
 ---
 # Generate SSL Certificates for Docker
-- name: generate docker ssl certs
-  include_role:
-    name: absvfx.authority
-    apply:
-      tags:
-        - generate_certs
+# - name: generate docker ssl certs
+#   include_role:
+#     name: absvfx.authority
+#     apply:
+#       tags:
+#         - generate_certs
 
 - name: add docker-ce yum repository
   shell: yum-config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
   args:
     creates: /etc/yum.repos.d/docker-ce.repo
   tags: install
+  when: ansible_facts['distribution'] == "Centos"
 
 - name: install docker
   package:
@@ -21,12 +22,24 @@
   tags:
     - install
     - update
+  when: ansible_facts['distribution'] == "Centos"
+
+- name: install docker
+  package:
+    name: "{{ item }}"
+  loop:
+    - docker
+  tags:
+    - install
+    - update
+  when: ansible_facts['distribution'] == "Archlinux"
 
 # Copy systemd Service
 - name: copy docker systemd service
   copy:
     src: /usr/lib/systemd/system/docker.service
     dest: /etc/systemd/system/docker.service
+    remote_src: yes
 
 # Modify systemd service for listening on TLS
 - name: allow tls connections
@@ -77,5 +90,3 @@
   tags:
     - install
     - update
-
-#- include_tasks: backup.yml

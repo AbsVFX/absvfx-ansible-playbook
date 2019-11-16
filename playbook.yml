@@ -1,29 +1,29 @@
 ---
-# Generate Certificate Authority, where the create_ca tag has been specified
-- hosts: authority
-  become: yes
-  gather_facts: yes
-  roles:
-    - role: absvfx.authority
-      tags:
-        - create_ca
-  tags:
-    - create_ca
-
-# Configure AbsVFX Dev Server
-- hosts: devserver
-  connection: ssh
-  become: yes
-  gather_facts: yes
-  roles:
-#    - role: absvfx.docker
-#    - role: absvfx.registry
-#      vars:
-#        target_hostname: registry.absvfx.xyz
-    - role: absvfx.jenkins
-      vars:
-        target_hostname: ci.absvfx.xyz
-#    - role: absvfx.kubernetes TODO: Implement functional kubeadm/kubectl install
+# # Generate Certificate Authority, where the create_ca tag has been specified
+# - hosts: authority
+#   become: yes
+#   gather_facts: yes
+#   roles:
+#     - role: absvfx.authority
+#       tags:
+#         - create_ca
+#   tags:
+#     - create_ca
+#
+# # Configure AbsVFX Dev Server
+# - hosts: devserver
+#   connection: ssh
+#   become: yes
+#   gather_facts: yes
+#   roles:
+# #    - role: absvfx.docker
+# #    - role: absvfx.registry
+# #      vars:
+# #        target_hostname: registry.absvfx.xyz
+#     - role: absvfx.jenkins
+#       vars:
+#         target_hostname: ci.absvfx.xyz
+# #    - role: absvfx.kubernetes TODO: Implement functional kubeadm/kubectl install
 
 # Configure AbsVFX Workstations
 - hosts: workstation
@@ -32,3 +32,4 @@
   gather_facts: yes
   roles:
     - role: absvfx.workstation
+    - role: absvfx.docker

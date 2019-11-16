@@ -1,2 +1,60 @@
 ---
 root_partition_format: xfs
+gtk_theme: Arc-Dark
+graphical_applications:
+  - arc-gtk-theme
+  - arc-icon-theme
+  - baobab
+  - firefox
+  - gedit
+  - gparted
+  - openttd
+  - thunderbird
+  - virt-manager
+  - wireshark-qt
+unwanted_packages:
+  - evolution
+required_packages:
+  - ansible
+  - dnsmasq
+  - ebtables
+  - firewalld
+  - gvfs
+  - gvfs-gphoto2
+  - gvfs-nfs
+  - gvfs-smb
+  - gvfs-mtp
+  - intel-ucode
+  - libvirt
+  - linux-headers
+  - lutris
+  - mesa-vdpau
+  - nfs-utils
+  - openbsd-netcat
+  - ovmf
+  - samba
+  - syncthing
+  - sudo
+  - tk
+  - tmux
+  - unrar
+  - vlc
+  #- wine
+  - zsh
+nvidia_packages:
+  - nvidia-dkms
+  - nvidia-settings
+  - cuda
+  - opencl-nvidia
+  # - lib32-nvidia-utils
+  # - lib32-vulkan-icd-loader
+  # - lib32-mesa-vdpau
+amd_packages:
+  - xf86-video-ati
+intel_graphics_packages:
+  - xf86-video-intel
+  - vulkan-intel
+  - intel-media-driver
+vmware_graphics_packages:
+  - xf86-video-vmware
+root_device_postfix:

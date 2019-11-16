@@ -168,3 +168,18 @@
 - include_tasks: secure.yml
   tags:
     - secure
+- name: default firewalld to python2
+  lineinfile:
+    path: /usr/bin/firewalld
+    regexp: '^#!/usr/bin/python'
+    line: "#!/usr/bin/python2"
+  tags:
+    - provision
+
+- name: enable firewalld
+  systemd:
+    state: started
+    enabled: yes
+    name: "firewalld"
+  tags:
+    - provision
